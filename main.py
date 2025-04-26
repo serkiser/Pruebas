@@ -1,89 +1,138 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
+from matplotlib.patches import Circle
 
-# Constantes
-G = 6.67430e-11  # Constante gravitacional
-dt = 1000        # Paso de tiempo (segundos)
+# Parámetros físicos
+k = 8.988e9  # Constante de Coulomb (N·m²/C²)
+q1 = 20e-5    # Carga de la primera bola (C)
+q2 = -20e-5   # Carga de la segunda bola (C)
+m1 = 5.0     # Masa de la primera bola (kg)
+m2 = 5.0     # Masa de la segunda bola (kg)
+radius = 0.3 # Radio de las bolas (m)
+d_initial = 4 # Distancia inicial entre centros (m)
 
-# Masas (kg)
-m_planet = 5.972e24  # Tierra
-m_object = 1000      # Satélite
+# Coeficientes de comportamiento
+coeficiente_restitucion = 0.3  # 0.0 = inelástico total, 1.0 = elástico
+factor_friccion = 0.98         # 1.0 = sin fricción, <1.0 = fricción
 
-# Posiciones iniciales (metros)
-planet_pos = np.array([0.0, 0.0])
-object_pos = np.array([6.371e6, 0.0])  # Radio terrestre
+# Posiciones iniciales (centros)
+x1, y1 = -d_initial/2, 0
+x2, y2 = d_initial/2, 0
 
-# Velocidad inicial (m/s) - Órbita circular
-object_vel = np.array([0.0, 7.7e3])  # ~7.7 km/s
+# Velocidades iniciales
+v1x, v1y = 0, 0.5
+v2x, v2y = 0, -0.5
 
-# Almacenar trayectoria
-trajectory = [object_pos.copy()]
+# Configuración de la gráfica
+fig, ax = plt.subplots(figsize=(10, 6))
+ax.set_xlim(-5, 5)
+ax.set_ylim(-2, 2)
+ax.set_aspect('equal')
+ax.grid(True)
+ax.set_title('Simulación de Cargas con Colisiones Inelásticas')
 
-# Simulación (1000 pasos)
-for _ in range(1000):
-    r_vector = planet_pos - object_pos
-    r = np.linalg.norm(r_vector)
+# Crear las bolas
+bola1 = Circle((x1, y1), radius, color='red', alpha=0.7, label=f'Carga: {q1}C')
+bola2 = Circle((x2, y2), radius, color='blue', alpha=0.7, label=f'Carga: {q2}C')
+ax.add_patch(bola1)
+ax.add_patch(bola2)
+ax.legend()
+
+# Texto para información
+info_text = ax.text(0.02, 0.95, '', transform=ax.transAxes)
+
+# Parámetros de simulación
+dt = 0.05  # Paso de tiempo (s)
+t_max = 15  # Tiempo máximo (s)
+frames = int(t_max / dt)
+
+def check_collision():
+    dx = x2 - x1
+    dy = y2 - y1
+    distance = np.sqrt(dx**2 + dy**2)
+    return distance <= 2 * radius
+
+def resolve_collision():
+    global v1x, v1y, v2x, v2y
     
-    # Evitar división por cero (si el objeto cae al planeta)
-    if r < 1e5:  # Si está muy cerca, detener la simulación
-        break
+    # Vector normal de colisión
+    nx = (x2 - x1) / (2 * radius)
+    ny = (y2 - y1) / (2 * radius)
     
-    # Fuerza gravitacional
-    force_magnitude = G * (m_planet * m_object) / (r**2)
-    force_direction = r_vector / r
-    force = force_magnitude * force_direction
+    # Velocidades relativas
+    vrelx = v2x - v1x
+    vrely = v2y - v1y
     
-    # Aceleración y movimiento
-    acceleration = force / m_object
-    object_vel += acceleration * dt
-    object_pos += object_vel * dt
+    # Producto punto (velocidad relativa en dirección normal)
+    dot_product = vrelx * nx + vrely * ny
     
-    trajectory.append(object_pos.copy())
+    # Impulso con pérdida de energía (inelástico)
+    J = (1 + coeficiente_restitucion) * (m1 * m2) / (m1 + m2) * dot_product
+    
+    # Aplicar impulso (frenado)
+    v1x += J * nx / m1
+    v1y += J * ny / m1
+    v2x -= J * nx / m2
+    v2y -= J * ny / m2
 
-# Convertir a array de NumPy
-trajectory = np.array(trajectory)
-
-# Configurar gráfico
-fig, ax = plt.subplots(figsize=(10, 10))
-ax.set_title("Simulación de Gravedad")
-ax.set_xlim(-1.5e7, 1.5e7)
-ax.set_ylim(-1.5e7, 1.5e7)
-
-# Dibujar planeta y objeto
-planet, = ax.plot(planet_pos[0], planet_pos[1], 'bo', markersize=20, label="Planeta")
-orbit, = ax.plot([], [], 'r-', label="Trayectoria")
-object_point, = ax.plot([], [], 'ro', label="Objeto")
-
-# Función de inicialización
-def init():
-    orbit.set_data([], [])
-    object_point.set_data([], [])
-    return orbit, object_point
-
-# Función de actualización (con protección contra frames vacíos)
 def update(frame):
-    if frame == 0:
-        return init()
+    global x1, y1, x2, y2, v1x, v1y, v2x, v2y
     
-    # Extraer coordenadas hasta el frame actual
-    x = trajectory[:frame+1, 0]  # frame+1 para incluir el punto actual
-    y = trajectory[:frame+1, 1]
+    # Calcular distancia entre centros
+    dx = x2 - x1
+    dy = y2 - y1
+    r = np.sqrt(dx**2 + dy**2)
     
-    orbit.set_data(x, y)
+    # Ley de Coulomb (solo si no están en contacto)
+    if r > 2 * radius:
+        F = k * q1 * q2 / r**2
+        Fx = F * dx/r
+        Fy = F * dy/r
+    else:
+        Fx, Fy = 0, 0
     
-    # Solo actualizar si hay datos
-    if len(x) > 0:
-        object_point.set_data([x[-1]], [y[-1]])
+    # Aceleraciones
+    a1x, a1y = -Fx/m1, -Fy/m1
+    a2x, a2y = Fx/m2, Fy/m2
     
-    return orbit, object_point
+    # Actualizar velocidades
+    v1x += a1x * dt
+    v1y += a1y * dt
+    v2x += a2x * dt
+    v2y += a2y * dt
+    
+    # Aplicar fricción (opcional, para frenado continuo)
+    v1x *= factor_friccion
+    v1y *= factor_friccion
+    v2x *= factor_friccion
+    v2y *= factor_friccion
+    
+    # Actualizar posiciones
+    x1 += v1x * dt
+    y1 += v1y * dt
+    x2 += v2x * dt
+    y2 += v2y * dt
+    
+    # Detección y respuesta de colisiones
+    if check_collision():
+        # Corregir posición para evitar solapamiento
+        overlap = 2 * radius - r
+        x1 -= overlap * dx/r * 0.5
+        y1 -= overlap * dy/r * 0.5
+        x2 += overlap * dx/r * 0.5
+        y2 += overlap * dy/r * 0.5
+        
+        resolve_collision()
+    
+    # Actualizar gráficos
+    bola1.center = (x1, y1)
+    bola2.center = (x2, y2)
+    info_text.set_text(f'Tiempo: {frame*dt:.2f}s\nDistancia: {r:.2f}m\nVelocidad: {np.sqrt(v1x**2 + v1y**2):.2f}m/s')
+    
+    return bola1, bola2, info_text
 
-# Crear animación (ajustar frames al tamaño de trajectory)
-ani = FuncAnimation(
-    fig, update, frames=len(trajectory),
-    init_func=init, blit=True, interval=50, repeat=False
-)
+# Crear animación
+ani = FuncAnimation(fig, update, frames=frames, interval=dt*1000, blit=True)
 
-plt.legend()
-plt.grid()
 plt.show()
