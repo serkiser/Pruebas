@@ -1,35 +1,35 @@
-from PySide6.QtWidgets import QApplication, QWidget, QPushButton, QLabel, QVBoxLayout
-import sys
+from PySide6.QtWidgets import QApplication, QWidget, QVBoxLayout, QLineEdit, QPushButton
+from llorens import procesar_nombre  # Importamos la función del otro archivo
 
-# Crear una clase para la ventana principal
-class VentanaPrincipal(QWidget):
+class Ventana(QWidget):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Mi primera GUI con PySide6")
-        self.setGeometry(100, 100, 300, 200)
+        self.setWindowTitle("Llorens - PySide6")
+        self.setGeometry(600, 300, 500, 400)
 
-        # Crear un layout vertical
+        self.setWindowTitle("Enviar nombre a otro archivo")
+
+        # Entrada de texto
+        self.entrada = QLineEdit()
+        self.entrada.setPlaceholderText("Escribe tu nombre")
+
+        # Botón
+        self.boton = QPushButton("Enviar")
+        self.boton.clicked.connect(self.enviar_nombre)
+
+        # Layout
         layout = QVBoxLayout()
-
-        # Crear un label y un botón
-        self.etiqueta = QLabel("¡Hola desde PySide6!")
-        boton = QPushButton("Haz clic")
-
-        # Conectar el botón a una función
-        boton.clicked.connect(self.cambiar_texto)
-
-        # Agregar widgets al layout
-        layout.addWidget(self.etiqueta)
-        layout.addWidget(boton)
-
-        # Establecer el layout en la ventana
+        layout.addWidget(self.entrada)
+        layout.addWidget(self.boton)
         self.setLayout(layout)
 
-    def cambiar_texto(self):
-        self.etiqueta.setText("¡Botón presionado!")
+    def enviar_nombre(self):
+        nombre = self.entrada.text()
+        resultado = procesar_nombre(nombre)
+        print("Respuesta desde logica.py:", resultado)
 
-# Crear la aplicación y mostrar la ventana
-app = QApplication(sys.argv)
-ventana = VentanaPrincipal()
+# Ejecutar la app
+app = QApplication([])
+ventana = Ventana()
 ventana.show()
-sys.exit(app.exec())
+app.exec()

@@ -1,5 +1,4 @@
-#Para poder ir más rapido < >
+#Para poder ir más rapido "mayor que" es ">", y el símbolo de "menor que" es "<"
 
 for i in range(10):
-    for j in range(10):
-        if  # Añade un salto de línea al final de cada fila
+    print('*' * i)
