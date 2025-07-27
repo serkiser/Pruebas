@@ -7,21 +7,21 @@ from matplotlib.patches import Circle
 k = 8.988e9  # Constante de Coulomb (N·m²/C²)
 q1 = 20e-5    # Carga de la primera bola (C)
 q2 = -20e-5   # Carga de la segunda bola (C)
-m1 = 5.0     # Masa de la primera bola (kg)
+m1 = 10.0     # Masa de la primera bola (kg)
 m2 = 5.0     # Masa de la segunda bola (kg)
-radius = 0.3 # Radio de las bolas (m)
-d_initial = 4 # Distancia inicial entre centros (m)
+radius = 0.2 # Radio de las bolas (m)
+d_initial = 10 # Distancia inicial entre centros (m)
 
 # Coeficientes de comportamiento
 coeficiente_restitucion = 0.3  # 0.0 = inelástico total, 1.0 = elástico
-factor_friccion = 0.98         # 1.0 = sin fricción, <1.0 = fricción
+factor_friccion = 0.998         # 1.0 = sin fricción, <1.0 = fricción
 
 # Posiciones iniciales (centros)
-x1, y1 = -d_initial/2, 0
+x1, y1 = -d_initial/3, 1
 x2, y2 = d_initial/2, 0
 
 # Velocidades iniciales
-v1x, v1y = 0, 0.5
+v1x, v1y = 1, 0.5
 v2x, v2y = 0, -0.5
 
 # Configuración de la gráfica
