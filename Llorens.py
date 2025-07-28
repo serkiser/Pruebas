@@ -1,5 +1,7 @@
 import requests
 
+lista_de_funciones = []
+
 def variable_nombre(nombre):
     # Comprobar que cada palabra del nombre tiene solo letras
     nombre_compuesto = all(palabra.isalpha() for palabra in nombre.split())
