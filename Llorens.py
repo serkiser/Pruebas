@@ -23,5 +23,13 @@ def variable_elo(elo):
         except ValueError:
             return "ELO inválido: por favor, introduce un número válido (ej: 1500)"
             
-            
-            
+def variable_donde_vives(lugar):
+    lugar_compuesto = all(palabra.isalpha() for palabra in lugar.split())
+
+    if not lugar_compuesto:
+        return "Lugar inválido: solo se permiten letras y espacios"
+
+    if lugar.isdigit():
+        return "Lugar inválido: no puede ser solo números"
+
+    return f"Lugar válido: {lugar}"

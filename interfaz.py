@@ -1,7 +1,7 @@
 from PySide6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QLineEdit, QPushButton, QLabel, QCheckBox
 )
-from llorens import variable_nombre, variable_elo
+from llorens import variable_nombre, variable_elo, variable_donde_vives
 
 class Ventana(QWidget):
     def __init__(self):
@@ -31,10 +31,10 @@ class Ventana(QWidget):
         self.boton_nombre.clicked.connect(self.enviar_nombre)
         self.entrada.returnPressed.connect(self.enviar_nombre)
 
-        # Botón invisible para ELO (Enter lo valida)
+        # Botón invisible para ELO
         self.elo_input.returnPressed.connect(self.enviar_elo)
         
-        # Botón invisible para donde vives (Enter lo valida)
+        # Botón invisible para donde vives
         self.vives_input.returnPressed.connect(self.enviar_vives)
 
         # Switch para modo nocturno
@@ -45,6 +45,7 @@ class Ventana(QWidget):
         layout = QVBoxLayout()
         layout.addWidget(self.entrada)
         layout.addWidget(self.elo_input)
+        layout.addWidget(self.vives_input)
         layout.addWidget(self.mensaje_label)
         layout.addWidget(self.boton_nombre)
         layout.addWidget(self.switch_noche)  
@@ -92,11 +93,15 @@ class Ventana(QWidget):
         elo = self.elo_input.text().strip()
         resultado = variable_elo(elo)
         self.mensaje_label.setText(resultado)
+        if "elo válido" in resultado.lower():
+            self.vives_input.setEnabled(True)
+        else:
+            self.vives_input.setEnabled(False)
+        
     def enviar_vives(self):
         donde_vives = self.vives_input.text().strip()
         resultado = variable_donde_vives(donde_vives)
-
-
+        self.mensaje_label.setText(resultado)
 
 # Ejecutar la app
 app = QApplication([])
