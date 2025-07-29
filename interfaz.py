@@ -1,6 +1,8 @@
 from PySide6.QtWidgets import (
-    QApplication, QWidget, QVBoxLayout, QLineEdit, QPushButton, QLabel, QCheckBox
+    QApplication, QWidget, QVBoxLayout, QHBoxLayout,
+    QLineEdit, QPushButton, QLabel, QCheckBox
 )
+from PySide6.QtCore import Qt
 from llorens import variable_nombre, variable_elo, variable_donde_vives
 
 class Ventana(QWidget):
@@ -8,6 +10,26 @@ class Ventana(QWidget):
         super().__init__()
         self.setWindowTitle("Llorens - PySide6")
         self.setGeometry(600, 300, 500, 400)
+
+        # --- Botón hamburguesa (≡) ---
+        self.boton_menu = QPushButton("≡")
+        self.boton_menu.setFixedSize(30, 30)
+        self.boton_menu.setStyleSheet("""
+            QPushButton {
+                background-color: transparent;
+                border: none;
+                font-size: 18px;
+                border-radius: 15px;
+            }
+            QPushButton:hover {
+                background-color: #dddddd;
+            }
+        """)
+        self.boton_menu.clicked.connect(self.abrir_menu)  # Puedes definir qué hace
+
+        barra_superior = QHBoxLayout()
+        barra_superior.addStretch()  # Empuja el botón a la derecha
+        barra_superior.addWidget(self.boton_menu)
 
         # Entrada de nombre
         self.entrada = QLineEdit()
@@ -20,36 +42,33 @@ class Ventana(QWidget):
         
         # Entrada de Lugar donde vives 
         self.vives_input = QLineEdit()
-        self.vives_input.setPlaceholderText("Introduce tu donde vives")
+        self.vives_input.setPlaceholderText("Introduce dónde vives")
         self.vives_input.setEnabled(False)
 
         # Mensaje
         self.mensaje_label = QLabel("")
 
-        # Botón para validar nombre
-        self.boton_nombre = QPushButton("Validar nombre")
-        self.boton_nombre.clicked.connect(self.enviar_nombre)
+        # Eventos de validación
         self.entrada.returnPressed.connect(self.enviar_nombre)
-
-        # Botón invisible para ELO
         self.elo_input.returnPressed.connect(self.enviar_elo)
-        
-        # Botón invisible para donde vives
         self.vives_input.returnPressed.connect(self.enviar_vives)
 
         # Switch para modo nocturno
         self.switch_noche = QCheckBox("Modo nocturno")
         self.switch_noche.stateChanged.connect(self.toggle_noche)
 
-        # Layout
+        # Layout principal
         layout = QVBoxLayout()
+        layout.addLayout(barra_superior)  # Añadimos la barra arriba del todo
         layout.addWidget(self.entrada)
         layout.addWidget(self.elo_input)
         layout.addWidget(self.vives_input)
         layout.addWidget(self.mensaje_label)
-        layout.addWidget(self.boton_nombre)
-        layout.addWidget(self.switch_noche)  
+        layout.addWidget(self.switch_noche)
         self.setLayout(layout)
+
+    def abrir_menu(self):
+        self.mensaje_label.setText("Botón de menú pulsado (puedes añadir funciones aquí)")
 
     def toggle_noche(self):
         if self.switch_noche.isChecked():
@@ -97,7 +116,7 @@ class Ventana(QWidget):
             self.vives_input.setEnabled(True)
         else:
             self.vives_input.setEnabled(False)
-        
+
     def enviar_vives(self):
         donde_vives = self.vives_input.text().strip()
         resultado = variable_donde_vives(donde_vives)
@@ -108,3 +127,4 @@ app = QApplication([])
 ventana = Ventana()
 ventana.show()
 app.exec()
+
