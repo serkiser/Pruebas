@@ -2,9 +2,24 @@ from PySide6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout,
     QLineEdit, QPushButton, QLabel, QCheckBox
 )
-from PySide6.QtCore import Qt
-from llorens import variable_nombre, variable_elo, variable_donde_vives
+from PySide6.QtCore import Qt, QThread, Signal
+import llorens as llorens
 
+
+# HILO PARA LA API -------------------------------------
+class ApiWorker(QThread):
+    resultado_api = Signal(str)
+
+    def __init__(self, elo):
+        super().__init__()
+        self.elo = elo
+
+    def run(self):
+        resultado = llorens.api_jugadores(self.elo)
+        self.resultado_api.emit(resultado)
+
+
+# INTERFAZ ---------------------------------------------
 class Ventana(QWidget):
     def __init__(self):
         super().__init__()
@@ -25,46 +40,47 @@ class Ventana(QWidget):
                 background-color: #dddddd;
             }
         """)
-        self.boton_menu.clicked.connect(self.abrir_menu)  # Puedes definir qué hace
+        self.boton_menu.clicked.connect(self.abrir_menu)
 
         barra_superior = QHBoxLayout()
-        barra_superior.addStretch()  # Empuja el botón a la derecha
+        barra_superior.addStretch()
         barra_superior.addWidget(self.boton_menu)
 
-        # Entrada de nombre
+        # Entradas
         self.entrada = QLineEdit()
         self.entrada.setPlaceholderText("Escribe tu nombre")
 
-        # Entrada de ELO 
         self.elo_input = QLineEdit()
         self.elo_input.setPlaceholderText("Introduce tu ELO")
         self.elo_input.setEnabled(False)
-        
-        # Entrada de Lugar donde vives 
+
         self.vives_input = QLineEdit()
         self.vives_input.setPlaceholderText("Introduce dónde vives")
         self.vives_input.setEnabled(False)
 
-        # Mensaje
+        # Etiquetas
         self.mensaje_label = QLabel("")
+        self.resultado_api_label = QLabel("")
 
-        # Eventos de validación
+        # Eventos
         self.entrada.returnPressed.connect(self.enviar_nombre)
         self.elo_input.returnPressed.connect(self.enviar_elo)
         self.vives_input.returnPressed.connect(self.enviar_vives)
 
-        # Switch para modo nocturno
+        # Modo nocturno
         self.switch_noche = QCheckBox("Modo nocturno")
         self.switch_noche.stateChanged.connect(self.toggle_noche)
 
-        # Layout principal
+        # Layout
         layout = QVBoxLayout()
-        layout.addLayout(barra_superior)  # Añadimos la barra arriba del todo
+        layout.addLayout(barra_superior)
         layout.addWidget(self.entrada)
         layout.addWidget(self.elo_input)
         layout.addWidget(self.vives_input)
         layout.addWidget(self.mensaje_label)
         layout.addWidget(self.switch_noche)
+        layout.addWidget(self.resultado_api_label)
+
         self.setLayout(layout)
 
     def abrir_menu(self):
@@ -91,7 +107,7 @@ class Ventana(QWidget):
                 }
             """)
         else:
-            self.setStyleSheet("")  # Estilo por defecto (modo claro)
+            self.setStyleSheet("")
 
     def enviar_nombre(self):
         nombre = self.entrada.text().strip()
@@ -100,7 +116,7 @@ class Ventana(QWidget):
             self.elo_input.setEnabled(False)
             return
 
-        resultado = variable_nombre(nombre)
+        resultado = llorens.variable_nombre(nombre)
         self.mensaje_label.setText(resultado)
 
         if resultado.lower().startswith("nombre válido"):
@@ -109,22 +125,36 @@ class Ventana(QWidget):
             self.elo_input.setEnabled(False)
 
     def enviar_elo(self):
-        elo = self.elo_input.text().strip()
-        resultado = variable_elo(elo)
+        elo_texto = self.elo_input.text().strip()
+        resultado = llorens.variable_elo(elo_texto)
         self.mensaje_label.setText(resultado)
+
         if "elo válido" in resultado.lower():
             self.vives_input.setEnabled(True)
+
+            # Llamada a API en segundo plano
+            try:
+                elo = int(elo_texto)
+                self.api_thread = ApiWorker(elo)
+                self.api_thread.resultado_api.connect(self.mostrar_resultado_api)
+                self.api_thread.start()
+            except ValueError:
+                self.resultado_api_label.setText("ELO inválido (no es un número entero)")
         else:
             self.vives_input.setEnabled(False)
+            self.resultado_api_label.setText("")
+
+    def mostrar_resultado_api(self, texto):
+        self.resultado_api_label.setText(texto)
 
     def enviar_vives(self):
         donde_vives = self.vives_input.text().strip()
-        resultado = variable_donde_vives(donde_vives)
+        resultado = llorens.variable_donde_vives(donde_vives)
         self.mensaje_label.setText(resultado)
 
-# Ejecutar la app
+
+# EJECUTAR APP -----------------------------------------
 app = QApplication([])
 ventana = Ventana()
 ventana.show()
 app.exec()
-

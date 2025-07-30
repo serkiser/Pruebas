@@ -1,7 +1,5 @@
 import requests
 
-lista_de_funciones = []
-
 def variable_nombre(nombre):
     # Comprobar que cada palabra del nombre tiene solo letras
     nombre_compuesto = all(palabra.isalpha() for palabra in nombre.split())
@@ -34,29 +32,25 @@ def variable_donde_vives(lugar):
 
     return f"Lugar válido: {lugar}"
 
-# Obtención de datos de jugadores FIDE
+def api_jugadores(elo):  
+    import requests  # asegúrate de que está al inicio
     url = "https://fide-api.vercel.app/top_players/?limit=200&history=false"
     data = requests.get(url).json()
 
-    # Variables para comparación
-    jugador_mas_cercano_superior = None
-    jugador_mas_cercano_inferior = None
     Lista_de_jugadores = []
     for jugador in data:
         try:
-            #Creamos la lista de jugadores y diferencia de elo
             elo_api = int(jugador['rating'])
             diferencia = abs(elo_api - elo)
-            Lista_de_jugadores.append((jugador['name'],  elo_api, jugador.get('rank', 'N/A'), diferencia))
-            
+            Lista_de_jugadores.append((jugador['name'], elo_api, jugador.get('rank', 'N/A'), diferencia))
         except (KeyError, ValueError):
-            continue  # Si hay error en los datos del jugador, pasamos al siguiente
+            continue
 
-    Lista_de_jugadores.sort(key=lambda x: x[3])  # Ordenamos por la diferencia de ELO
+    Lista_de_jugadores.sort(key=lambda x: x[3])
+    
     if len(Lista_de_jugadores) > 1 and Lista_de_jugadores[0][3] == Lista_de_jugadores[1][3]:
-        print("\nHay empate en la menor diferencia:")
-        print(Lista_de_jugadores[0])
-        print(Lista_de_jugadores[1])
+        return f"Empate:\n1. {Lista_de_jugadores[0][0]} ({Lista_de_jugadores[0][1]})\n2. {Lista_de_jugadores[1][0]} ({Lista_de_jugadores[1][1]})"
     else:
-        print("\nSolo un jugador tiene la menor diferencia:")
-        print(Lista_de_jugadores[0])
+        jugador = Lista_de_jugadores[0]
+        return f"Jugador más cercano: {jugador[0]} (ELO {jugador[1]})"
+
