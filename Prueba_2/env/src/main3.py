@@ -3,38 +3,35 @@ import numpy as np
 import matplotlib.pyplot as plt
 import json
 import pandas as pd
-from scipy.signal import find_peaks, peak_widths
 from scipy.integrate import simpson
+from scipy.signal import find_peaks, peak_widths
+from scipy.stats import median_abs_deviation
 
 # -------- CONFIGURACIÓN --------
 fits_file = r"C:\Users\PC\Desktop\Ellie\Programación\Pruebas\Preubas\Prueba_2\env\src\med-58859-NT054013S012745S01_sp12-180.fits"
 
 # Parámetros de procesamiento
-REBIN_FACTOR = 1
-SG_WINDOW = 31
-SG_POLY = 3
-MOVING_AVG_WINDOW = 25
-DO_CONTINUUM_NORM = False
+REBIN_FACTOR = 4
+SG_WINDOW = 61
+SG_POLY = 2
+MOVING_AVG_WINDOW = 35
+DO_CONTINUUM_NORM = True
 
 # Parámetros de análisis
-SNR_WINDOW = 100  # Ventana para cálculo de SNR
-CONTINUUM_WINDOW = 501  # Ventana para cálculo de continuo
-CONTINUUM_PERCENTILE = 95  # Percentil para estimación de continuo
+SNR_WINDOW = 150
+CONTINUUM_WINDOW = 701
+CONTINUUM_PERCENTILE = 90
+REDSHIFT_SIGMA_CLIP = 2.0  # Número de desviaciones estándar para filtrar outliers
 
-# Líneas de interés para análisis
+# Líneas de interés para análisis (ampliada para mejor cálculo de redshift)
 lines = {
     "Hβ": 4861.3,
-    "Fe I 4957": 4957.6,
-    "Fe I 5006": 5006.1,
-    "Fe I 5051": 5051.6,
-    "Mg I 5167": 5167.3,
-    "Mg I 5172": 5172.7,
-    "Mg I 5183": 5183.6,
-    "Fe I 5198": 5198.7,
-    "Fe I 5227": 5227.2,
-    "Fe I 5247": 5247.1,
-    "Fe I 5328": 5328.0,
-    "Fe I 5371": 5371.5
+    "[O III] 4959": 4958.91,    # Línea importante en nebulosas
+    "[O III] 5007": 5006.84,    # Línea fuerte en regiones HII
+    "[N II] 6548": 6548.05,     # Línea de nitrógeno (si el rango espectral lo permite)
+    "[N II] 6583": 6583.45,     # Otra línea de nitrógeno
+    "[S II] 6716": 6716.44,     # Línea de azufre
+    "[S II] 6731": 6730.82      # Otra línea de azufre
 }
 
 # ---------- FUNCIONES DE UTILIDAD ----------
@@ -85,6 +82,20 @@ def running_percentile(y, win=301, q=90):
         cont[i] = np.nanpercentile(y[a:b], q)
     return cont
 
+def enhance_line_detection(flux, enhancement_factor=1.5):
+    """
+    Realza las líneas espectrales en espectros ruidosos
+    aplicando una transformación no lineal al flujo.
+    """
+    # Normalizar el flujo
+    norm_flux = (flux - np.min(flux)) / (np.max(flux) - np.min(flux))
+    
+    # Aplicar transformación no lineal para realzar características
+    enhanced_flux = np.power(norm_flux, enhancement_factor)
+    
+    # Reescalar al rango original
+    return enhanced_flux * (np.max(flux) - np.min(flux)) + np.min(flux)
+
 def calculate_snr(flux, window=100):
     """Calcula la relación señal/ruido (SNR) del espectro"""
     n_segments = len(flux) // window
@@ -133,7 +144,7 @@ def measure_line_parameters(wavelengths, flux, line_center, window=10):
     else:
         fwhm = np.nan
     
-    # Calivar profundidad de la línea
+    # Calcular profundidad de la línea
     depth = 1 - (min_flux / continuum)
     
     return {
@@ -147,6 +158,28 @@ def measure_line_parameters(wavelengths, flux, line_center, window=10):
 def calculate_redshift(observed_wavelength, rest_wavelength):
     """Calcula el redshift a partir de una línea espectral"""
     return (observed_wavelength - rest_wavelength) / rest_wavelength
+
+def robust_redshift_calculation(redshifts, sigma_clip=3.0):
+    """Calcula un redshift robusto eliminando outliers"""
+    if len(redshifts) == 0:
+        return None, None, 0
+    
+    # Primera estimación usando mediana y MAD
+    median_z = np.median(redshifts)
+    mad_z = median_abs_deviation(redshifts)
+    
+    # Filtrar outliers
+    filtered_redshifts = [z for z in redshifts if abs(z - median_z) < sigma_clip * mad_z]
+    
+    if len(filtered_redshifts) == 0:
+        # Si todos son outliers, usar la mediana original
+        return median_z, mad_z, len(redshifts)
+    
+    # Calcular media y desviación estándar de los valores filtrados
+    mean_z = np.mean(filtered_redshifts)
+    std_z = np.std(filtered_redshifts)
+    
+    return mean_z, std_z, len(filtered_redshifts)
 
 def calculate_mg_fe_index(wavelengths, flux, mg_line=5175, fe_line=5270, window=20):
     """Calcula el índice Mg/Fe para estimar metalicidad"""
@@ -169,7 +202,7 @@ def estimate_temperature(hbeta_ew):
     else:
         return "Fría (<6000 K)", 5500
 
-def find_emission_lines(wavelengths, flux, height_threshold=0.1, distance=10):
+def find_emission_lines(wavelengths, flux, height_threshold=0.05, distance=5):  # Umbral más bajo
     """Encuentra líneas de emisión en el espectro"""
     # Normalizar el flujo para el detector de picos
     norm_flux = (flux - np.min(flux)) / (np.max(flux) - np.min(flux))
@@ -211,18 +244,34 @@ def generate_spectral_report(wavelengths, flux, ivar, lines_dict):
     
     # Medir parámetros para cada línea de absorción
     report['absorption_lines'] = {}
+    redshifts = []  # Lista para almacenar todos los redshifts calculados
+    
     for name, rest_wl in lines_dict.items():
         measurement = measure_line_parameters(wavelengths, flux, rest_wl)
         if measurement:
             report['absorption_lines'][name] = measurement
             
-            # Calcular redshift si es Hβ
-            if name == "Hβ":
-                report['redshift'] = float(calculate_redshift(measurement['observed_center'], rest_wl))
-                report['radial_velocity'] = float(report['redshift'] * 299792.458)  # km/s
-                temp_est, temp_val = estimate_temperature(measurement['equivalent_width'])
-                report['temperature_estimate'] = temp_est
-                report['temperature_value'] = temp_val
+            # Calcular redshift para esta línea
+            z = calculate_redshift(measurement['observed_center'], rest_wl)
+            measurement['redshift'] = z
+            redshifts.append(z)
+    
+    # Calcular redshift robusto usando múltiples líneas
+    if redshifts:
+        mean_z, std_z, n_lines = robust_redshift_calculation(redshifts, sigma_clip=REDSHIFT_SIGMA_CLIP)
+        
+        report['redshift'] = {
+            'value': float(mean_z),
+            'error': float(std_z),
+            'n_lines_used': n_lines,
+            'n_lines_total': len(redshifts)
+        }
+        
+        # Calcular velocidad radial
+        report['radial_velocity'] = {
+            'value': float(mean_z * 299792.458),  # km/s
+            'error': float(std_z * 299792.458)
+        }
     
     # Buscar líneas de emisión
     report['emission_lines'] = find_emission_lines(wavelengths, flux)
@@ -237,6 +286,13 @@ def generate_spectral_report(wavelengths, flux, ivar, lines_dict):
         report['metallicity_estimate'] = "Metalicidad solar"
     else:
         report['metallicity_estimate'] = "Alta metalicidad"
+    
+    # Estimación de temperatura si se midió Hβ
+    if 'Hβ' in report['absorption_lines']:
+        hbeta_ew = report['absorption_lines']['Hβ']['equivalent_width']
+        temp_est, temp_val = estimate_temperature(hbeta_ew)
+        report['temperature_estimate'] = temp_est
+        report['temperature_value'] = temp_val
     
     return report
 
@@ -262,7 +318,13 @@ def plot_spectrum_with_analysis(wavelengths, flux_original, flux_processed, line
     
     plt.xlabel("Longitud de onda (Å)")
     plt.ylabel("Flujo")
-    plt.title(f"Espectro LAMOST - SNR: {report['snr']:.1f} - z: {report.get('redshift', 0):.4f}")
+    
+    # Título con información de redshift si está disponible
+    title = f"Espectro LAMOST - SNR: {report['snr']:.1f}"
+    if 'redshift' in report:
+        title += f" - z: {report['redshift']['value']:.6f} ± {report['redshift']['error']:.6f}"
+    plt.title(title)
+    
     plt.legend()
     plt.grid(alpha=0.3)
     
@@ -328,14 +390,17 @@ def main():
     # 4) Suavizado
     flux_smooth = try_savgol(flux_r, window=SG_WINDOW, poly=SG_POLY)
 
-    # 5) Normalización de continuo (opcional)
+    # 4.5) Realce de líneas para espectros con SNR bajo
+    flux_enhanced = enhance_line_detection(flux_smooth, enhancement_factor=1.3)
+
+    # 5) (opcional) normalización de continuo
     if DO_CONTINUUM_NORM:
-        cont = running_percentile(flux_smooth, win=CONTINUUM_WINDOW, q=CONTINUUM_PERCENTILE)
+        cont = running_percentile(flux_enhanced, win=CONTINUUM_WINDOW, q=CONTINUUM_PERCENTILE)
         cont = np.where(cont <= 0, np.nanmedian(cont[cont>0]), cont)
-        flux_plot = flux_smooth / cont
+        flux_plot = flux_enhanced / cont
         ylab = "Flujo (normalizado)"
     else:
-        flux_plot = flux_smooth
+        flux_plot = flux_enhanced
         ylab = "Flujo"
 
     # 6) Generar reporte de análisis
@@ -347,8 +412,13 @@ def main():
     print(f"SNR estimado: {report['snr']:.1f}")
     
     if 'redshift' in report:
-        print(f"Redshift: {report['redshift']:.6f}")
-        print(f"Velocidad radial: {report['radial_velocity']:.1f} km/s")
+        z_info = report['redshift']
+        rv_info = report['radial_velocity']
+        print(f"Redshift: {z_info['value']:.6f} ± {z_info['error']:.6f}")
+        print(f"Velocidad radial: {rv_info['value']:.1f} ± {rv_info['error']:.1f} km/s")
+        print(f"Líneas utilizadas: {z_info['n_lines_used']}/{z_info['n_lines_total']}")
+    
+    if 'temperature_estimate' in report:
         print(f"Temperatura estimada: {report['temperature_estimate']}")
     
     print(f"Ratio Mg/Fe: {report['mg_fe_ratio']:.3f}")
@@ -356,7 +426,7 @@ def main():
     
     print("\n=== LÍNEAS DE ABSORCIÓN DETECTADAS ===")
     for name, params in report['absorption_lines'].items():
-        print(f"{name}: EW={params['equivalent_width']:.3f}Å, FWHM={params['fwhm']:.3f}Å")
+        print(f"{name}: EW={params['equivalent_width']:.3f}Å, FWHM={params['fwhm']:.3f}Å, z={params.get('redshift', 'N/A'):.6f}")
     
     print("\n=== LÍNEAS DE EMISIÓN DETECTADAS ===")
     for i, line in enumerate(report['emission_lines']):
