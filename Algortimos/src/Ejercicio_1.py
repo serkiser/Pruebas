@@ -13,5 +13,5 @@ while True:
 if valor_uno > valor_dos:
         print (f"El {valor_uno} es mayor que {valor_dos}")
 else:
-         print (f"El {valor_dos} es mayor que {valor_uno}")
+        print (f"El {valor_dos} es mayor que {valor_uno}")
 
